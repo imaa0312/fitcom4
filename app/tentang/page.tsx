@@ -1,5 +1,6 @@
+import Image from "next/image";
 import Link from "next/link";
-import { Shield, Code2, Cpu, Bot, CalendarDays, MapPin, Building2, ArrowRight } from "lucide-react";
+import { Shield, Code2, Cpu, Bot, CalendarDays, MapPin, Building2, ArrowRight, CheckCircle2 } from "lucide-react";
 
 const CABANG = [
   {
@@ -40,16 +41,76 @@ const CABANG = [
   },
 ];
 
-const TIMELINE = [
-  { date: "1 Juli 2026", label: "Pendaftaran Dibuka", open: true },
-  { date: "1 September 2026", label: "Batas Akhir Pendaftaran" },
-  { date: "17 September 2026", label: "Deadline Pengumpulan Tahap 1" },
-  { date: "18 Oktober 2026", label: "Deadline Video & Poster IoT" },
-  { date: "28 Oktober 2026", label: "Deadline PPT Presentasi IoT" },
-  { date: "29 Oktober 2026", label: "Hari Pelaksanaan Final", final: true },
+/* Milestone dates untuk timeline */
+const TIMELINE_DATA = [
+  {
+    iso: "2026-07-01",
+    label: "Pendaftaran Dibuka",
+    note: "Registrasi online dibuka untuk semua cabang lomba",
+  },
+  {
+    iso: "2026-09-01",
+    label: "Batas Akhir Pendaftaran",
+    note: "Setelah tanggal ini, formulir pendaftaran ditutup",
+  },
+  {
+    iso: "2026-09-17",
+    label: "Deadline Pengumpulan Tahap 1",
+    note: "Cyber Security & Web: pengumpulan karya. IoT: Proposal",
+  },
+  {
+    iso: "2026-10-18",
+    label: "Deadline Video & Poster IoT",
+    note: "Pengumpulan tahap 2 khusus cabang Internet of Things",
+  },
+  {
+    iso: "2026-10-28",
+    label: "Deadline PPT Presentasi IoT",
+    note: "Pengumpulan tahap 3 khusus cabang Internet of Things",
+  },
+  {
+    iso: "2026-10-29",
+    label: "Hari Pelaksanaan Final",
+    note: "Semua cabang, onsite di Universitas Dinamika Surabaya",
+  },
 ];
 
+function buildTimeline() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const items = TIMELINE_DATA.map((item) => {
+    const date = new Date(item.iso + "T00:00:00");
+    const diffDays = Math.round(
+      (date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    const status =
+      diffDays < 0 ? "passed" : diffDays === 0 ? "today" : "upcoming";
+    return { ...item, date, diffDays, status };
+  });
+
+  /* Tandai item "next" — milestone upcoming pertama */
+  const nextIdx = items.findIndex((it) => it.status !== "passed");
+
+  return items.map((it, i) => ({
+    ...it,
+    isNext: i === nextIdx && it.status === "upcoming",
+  }));
+}
+
+function formatDate(date: Date) {
+  return date.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 export default function TentangPage() {
+  const timeline = buildTimeline();
+  const passedCount = timeline.filter((t) => t.status === "passed").length;
+  const progressPct = Math.round((passedCount / timeline.length) * 100);
+
   return (
     <>
       {/* ── Hero ─────────────────────────────────────────────────────────────── */}
@@ -63,7 +124,6 @@ export default function TentangPage() {
           }}
         />
 
-        {/* "FITCOM" watermark */}
         <span
           className="absolute select-none font-black text-white/[0.03] leading-none pointer-events-none whitespace-nowrap"
           style={{
@@ -94,7 +154,6 @@ export default function TentangPage() {
             </p>
           </div>
 
-          {/* Quick stats strip */}
           <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { value: "4", label: "Cabang Lomba" },
@@ -146,7 +205,6 @@ export default function TentangPage() {
             </div>
           </div>
 
-          {/* Tema callout */}
           <div className="rounded-2xl bg-fitcom-darkest p-8 relative overflow-hidden">
             <div className="absolute inset-0 bg-dot-grid opacity-60" />
             <div className="relative z-10">
@@ -219,7 +277,9 @@ export default function TentangPage() {
                 </div>
                 <div className="mt-6 flex items-center gap-1.5 text-sm font-semibold text-white/30 group-hover:text-white/70 transition-colors duration-300">
                   Daftar Sekarang
-                  <span className="group-hover:translate-x-1 transition-transform duration-300 inline-block">→</span>
+                  <span className="group-hover:translate-x-1 transition-transform duration-300 inline-block">
+                    →
+                  </span>
                 </div>
               </Link>
             ))}
@@ -227,10 +287,11 @@ export default function TentangPage() {
         </div>
       </section>
 
-      {/* ── Timeline ─────────────────────────────────────────────────────────── */}
+      {/* ── Timeline (dinamis — status dihitung dari tanggal hari ini) ────────── */}
       <section className="py-20 bg-white">
         <div className="max-w-5xl mx-auto px-6">
           <div className="grid md:grid-cols-[1fr_2fr] gap-12 items-start">
+            {/* Left: sticky heading + progress */}
             <div className="md:sticky md:top-24">
               <p className="text-xs font-bold tracking-[0.18em] uppercase text-fitcom-dark/40 mb-4">
                 Jadwal
@@ -240,47 +301,111 @@ export default function TentangPage() {
                 <br />
                 FITCOM 4.0
               </h2>
-              <p className="text-sm text-gray-400 leading-relaxed">
-                Pendaftaran dibuka 1 Juli hingga 1 September 2026. Hari pelaksanaan final
-                di kampus Universitas Dinamika Surabaya.
+              <p className="text-sm text-gray-400 leading-relaxed mb-8">
+                Pendaftaran dibuka 1 Juli – 1 September 2026. Final onsite di
+                Universitas Dinamika Surabaya.
               </p>
+
+              {/* Progress bar */}
+              <div>
+                <div className="flex justify-between text-xs text-gray-400 mb-2">
+                  <span>{passedCount} dari {timeline.length} milestone tercapai</span>
+                  <span className="font-semibold text-fitcom-dark">{progressPct}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-fitcom-neutral overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-fitcom-dark transition-all"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+              </div>
             </div>
 
-            <ol className="relative border-l-2 border-fitcom-neutral flex flex-col">
-              {TIMELINE.map((item, i) => (
-                <li key={i} className="pl-8 pb-8 last:pb-0 relative">
-                  <span
-                    className={[
-                      "absolute -left-[9px] top-1 w-4 h-4 rounded-full border-2 transition-colors",
-                      item.final
-                        ? "bg-fitcom-darkest border-fitcom-darkest"
-                        : item.open
-                        ? "bg-green-500 border-green-500"
-                        : "bg-white border-fitcom-neutral",
-                    ].join(" ")}
-                  />
-                  <p
-                    className={[
-                      "text-xs font-bold tracking-wide uppercase mb-1",
-                      item.final
-                        ? "text-fitcom-darkest"
-                        : item.open
-                        ? "text-green-600"
-                        : "text-fitcom-dark/50",
-                    ].join(" ")}
-                  >
-                    {item.date}
-                  </p>
-                  <p
-                    className={[
-                      "text-base font-semibold",
-                      item.final || item.open ? "text-fitcom-darkest" : "text-gray-600",
-                    ].join(" ")}
-                  >
-                    {item.label}
-                  </p>
-                </li>
-              ))}
+            {/* Right: timeline list */}
+            <ol className="relative flex flex-col">
+              {timeline.map((item, i) => {
+                const isLast = i === timeline.length - 1;
+
+                /* Warna titik dan garis vertikal berdasarkan status */
+                const dotClass =
+                  item.status === "passed"
+                    ? "bg-green-500 border-green-500"
+                    : item.status === "today"
+                    ? "bg-fitcom-dark border-fitcom-dark"
+                    : item.isNext
+                    ? "bg-white border-fitcom-dark"
+                    : "bg-white border-fitcom-neutral";
+
+                const lineClass =
+                  item.status === "passed" ? "bg-green-400" : "bg-fitcom-neutral";
+
+                return (
+                  <li key={i} className="relative flex gap-5 pb-8 last:pb-0">
+                    {/* Vertical line + dot column */}
+                    <div className="flex flex-col items-center">
+                      <span
+                        className={`w-4 h-4 rounded-full border-2 shrink-0 mt-0.5 z-10 ${dotClass}`}
+                      />
+                      {!isLast && (
+                        <div className={`w-0.5 flex-1 mt-1 ${lineClass}`} />
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="pb-0 flex-1">
+                      {/* Status badges */}
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        {item.status === "passed" && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                            <CheckCircle2 size={10} />
+                            Selesai
+                          </span>
+                        )}
+                        {item.status === "today" && (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-white bg-fitcom-dark px-2.5 py-0.5 rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
+                            HARI INI
+                          </span>
+                        )}
+                        {item.isNext && (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-fitcom-dark bg-fitcom-dark/10 px-2.5 py-0.5 rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-fitcom-dark inline-block" />
+                            {item.diffDays === 1
+                              ? "Besok"
+                              : `${item.diffDays} hari lagi`}
+                          </span>
+                        )}
+                      </div>
+
+                      <p
+                        className={`text-xs font-bold tracking-wide uppercase mb-0.5 ${
+                          item.status === "passed"
+                            ? "text-green-600"
+                            : item.status === "today" || item.isNext
+                            ? "text-fitcom-dark"
+                            : "text-gray-400"
+                        }`}
+                      >
+                        {formatDate(item.date)}
+                      </p>
+                      <p
+                        className={`text-base font-semibold mb-1 ${
+                          item.status === "passed"
+                            ? "text-gray-400 line-through decoration-1"
+                            : item.status === "today" || item.isNext
+                            ? "text-fitcom-darkest"
+                            : "text-gray-600"
+                        }`}
+                      >
+                        {item.label}
+                      </p>
+                      <p className="text-xs text-gray-400 leading-relaxed">
+                        {item.note}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
             </ol>
           </div>
         </div>
@@ -291,12 +416,21 @@ export default function TentangPage() {
         <div className="max-w-5xl mx-auto px-6">
           <div className="grid md:grid-cols-2 gap-8 items-center">
             <div>
-              <p className="text-white/30 text-xs font-bold tracking-[0.2em] uppercase mb-4">
+              <p className="text-white/30 text-xs font-bold tracking-[0.2em] uppercase mb-6">
                 Penyelenggara
               </p>
-              <h2 className="text-3xl md:text-4xl font-black text-white leading-tight mb-5">
-                Universitas Dinamika
-              </h2>
+
+              {/* Undika logo */}
+              <div className="mb-6">
+                <Image
+                  src="/undika-logo.png"
+                  alt="Universitas Dinamika"
+                  width={3509}
+                  height={955}
+                  className="h-12 w-auto"
+                />
+              </div>
+
               <p className="text-white/50 text-sm leading-relaxed mb-8">
                 Fakultas Teknologi dan Informatika, universitas swasta di Surabaya yang
                 fokus di bidang teknologi informasi dan komunikasi.
