@@ -1,0 +1,302 @@
+// ============================================================================
+// SCHEMA DESIGN NOTES (baca ini sebelum nambah model baru)
+// ============================================================================
+// 1. User adalah satu-satunya sumber identitas. Semua fitur lain (lomba,
+//    forum, grup, course — nanti) HARUS relasi ke User, bukan punya
+//    tabel "akun" sendiri-sendiri.
+// 2. Role memakai tabel terpisah (UserRole) bukan enum tunggal di User,
+//    supaya satu user bisa punya lebih dari satu role (misal: panitia
+//    DAN peserta) tanpa migrasi ulang skema.
+// 3. Registrasi akun (User) SENGAJA dipisah total dari Competition.
+//    Relasi many-to-many lewat CompetitionRegistration — sesuai requirement:
+//    "yang regis akun ga harus regis lomba".
+// 4. Field yang nanti dipakai forum/grup/course (createdAt, updatedAt,
+//    authorId pattern) sudah konsisten dari sekarang, supaya saat model
+//    baru ditambah, konvensinya nyambung.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ----------------------------------------------------------------------------
+// CORE: User & Role
+// ----------------------------------------------------------------------------
+
+model User {
+  id        String   @id @default(uuid()) // harus sama dengan Supabase auth.users.id
+  email     String   @unique
+  fullName  String
+  phone     String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  roles                  UserRole[]
+  registeredCompetitions CompetitionRegistration[] @relation("RegisteredCompetitions")
+  createdCompetitions    Competition[]
+
+  // Relasi di bawah ini placeholder untuk fase berikutnya (forum/grup/course).
+  // Sudah didefinisikan sekarang supaya migrasi nanti tinggal nambah model,
+  // bukan ubah model User lagi.
+  // forumPosts    ForumPost[]
+  // groupMembers  GroupMember[]
+  // courseEnrolls CourseEnrollment[]
+
+  @@map("users")
+}
+
+enum RoleName {
+  ADMIN // full akses platform
+  PANITIA // pengelola lomba tertentu
+  PESERTA // default role saat register akun
+}
+
+model UserRole {
+  id     String   @id @default(uuid())
+  userId String
+  role   RoleName
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, role]) // user tidak bisa punya role duplikat
+  @@map("user_roles")
+}
+
+// ----------------------------------------------------------------------------
+// COMPETITION (event besar, contoh: FITCOM 4.0)
+// ----------------------------------------------------------------------------
+// Satu Competition = satu event tahunan. Di dalamnya ada beberapa
+// CompetitionBranch (cabang lomba) — misal FITCOM punya 4 cabang:
+// Cyber Security, Web Programming, IoT, Sumo Bot. Tiap cabang punya
+// jadwal, biaya, tipe peserta, dan tahap submission sendiri-sendiri.
+
+enum CompetitionStatus {
+  DRAFT // belum publish, cuma panitia yg lihat
+  OPEN // buka registrasi
+  CLOSED // registrasi ditutup, lomba belum mulai/selesai
+  ONGOING
+  FINISHED
+}
+
+model Competition {
+  id          String            @id @default(uuid())
+  title       String // "FITCOM 4.0"
+  slug        String            @unique
+  description String
+  theme       String? // "Intelligent Living Systems"
+  status      CompetitionStatus @default(DRAFT)
+
+  eventDate DateTime? // tanggal final offline, contoh: 29 Okt 2026
+  location  String? // contoh: "Universitas Dinamika, Surabaya"
+  posterUrl String? // disimpan di Supabase Storage, field ini cuma nyimpen URL/path
+
+  createdById String // panitia yang bikin
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branches CompetitionBranch[]
+
+  @@map("competitions")
+}
+
+// ----------------------------------------------------------------------------
+// COMPETITION BRANCH (cabang lomba — Cyber Security, Web Programming, dst)
+// ----------------------------------------------------------------------------
+
+enum ParticipantType {
+  INDIVIDUAL // contoh: Cyber Security
+  TEAM // contoh: Web Programming, IoT, Sumo Bot
+}
+
+model CompetitionBranch {
+  id            String          @id @default(uuid())
+  competitionId String
+  name          String // "Cyber Security", "Web Programming", "Internet of Things", "Sumo Bot RC 1kg"
+  slug          String // unik per competition, bukan global
+  description   String?
+
+  participantType ParticipantType
+  teamSize        Int? // null kalau INDIVIDUAL. contoh: 2 untuk Web/IoT/SumoBot
+
+  maxTeamsPerSchool Int? // contoh: 3 (semua cabang FITCOM = max 3 tim/peserta per sekolah)
+  maxQuota          Int? // null = unlimited
+
+  registrationFee Int // dalam Rupiah, sebelum kode unik. contoh: 100000
+  uniqueCode      Int? // kode unik per cabang untuk transfer manual. contoh: 1, 2, 3, 4
+
+  registrationStart DateTime
+  registrationEnd   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  competition      Competition              @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  registrations     CompetitionRegistration[]
+  submissionStages  SubmissionStage[]
+
+  @@unique([competitionId, slug])
+  @@map("competition_branches")
+}
+
+// ----------------------------------------------------------------------------
+// REGISTRATION (pendaftaran ke satu cabang lomba)
+// ----------------------------------------------------------------------------
+// CompetitionRegistration mewakili SATU entri pendaftaran — baik itu
+// 1 peserta individu (Cyber Security) atau 1 tim (Web/IoT/SumoBot).
+// User yang mendaftarkan disebut "registeredBy" — bisa peserta itu sendiri
+// atau ketua tim. Detail tiap orang (termasuk peserta individu) dicatat
+// di TeamMember, supaya data per-orang konsisten di satu tempat.
+
+enum RegistrationStatus {
+  PENDING_PAYMENT // sudah isi form, belum verifikasi bukti bayar
+  PENDING_REVIEW // bukti bayar sudah masuk, nunggu verifikasi panitia
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model CompetitionRegistration {
+  id       String             @id @default(uuid())
+  branchId String
+  status   RegistrationStatus @default(PENDING_PAYMENT)
+
+  // Untuk INDIVIDUAL: alias dipakai sebagai identifier administratif.
+  // Untuk TEAM: teamName dipakai sebagai identifier.
+  teamName  String? // null kalau INDIVIDUAL
+  alias     String? // khusus Cyber Security: alias administratif peserta
+  robotName String? // khusus Sumo Bot
+
+  schoolName      String
+  teacherName     String
+  teacherEmail    String
+  teacherWhatsapp String
+
+  // Bukti pembayaran (manual transfer + kode unik, BUKAN payment gateway).
+  paymentProofUrl     String?
+  paymentVerifiedAt   DateTime?
+  paymentVerifiedById String?
+
+  // Bukti follow Instagram — requirement semua cabang FITCOM (2 foto/peserta).
+  instagramProofUrls String[] // disimpan sebagai array path/URL Supabase Storage
+
+  referralSource String? // "Instagram" | "Poster" | "Sekolah atau Guru" | dst — bebas teks
+
+  registeredById String // User yang submit form (peserta individu, atau ketua tim)
+  registeredAt   DateTime  @default(now())
+  reviewedAt     DateTime?
+  reviewedById   String?
+
+  branch       CompetitionBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  registeredBy User              @relation("RegisteredCompetitions", fields: [registeredById], references: [id])
+  members      TeamMember[]
+  submissions  Submission[]
+
+  @@map("competition_registrations")
+}
+
+// ----------------------------------------------------------------------------
+// TEAM MEMBER (anggota tim — termasuk peserta individu sebagai "member tunggal")
+// ----------------------------------------------------------------------------
+// Untuk individu (Cyber Security): cukup 1 row dengan teamRole = null.
+// Untuk tim (Web/IoT): 2 row setara, teamRole = null juga (Peserta 1 & 2 setara).
+// Untuk Sumo Bot: 2 row, salah satunya teamRole = LEADER (ketua tim eksplisit
+// di form), yang lain MEMBER.
+
+enum TeamRole {
+  LEADER // ketua tim — dipakai khusus Sumo Bot, form lain tidak membedakan
+  MEMBER
+}
+
+model TeamMember {
+  id             String    @id @default(uuid())
+  registrationId String
+  teamRole       TeamRole? // null kalau form tidak membedakan ketua/anggota
+
+  fullName       String
+  classLevel     String // "Kelas X" | "Kelas XI" | "Kelas XII"
+  email          String
+  whatsapp       String
+  studentCardUrl String? // foto kartu siswa, di Supabase Storage
+
+  createdAt DateTime @default(now())
+
+  registration CompetitionRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  @@map("team_members")
+}
+
+// ----------------------------------------------------------------------------
+// SUBMISSION STAGE & SUBMISSION (pengumpulan karya — proposal, PPT, video, dst)
+// ----------------------------------------------------------------------------
+// Tiap cabang bisa punya beberapa tahap submission dengan urutan berbeda:
+//   Cyber Security : 1 tahap (file .pka)
+//   Web Programming: 1 tahap (proposal + link figma)
+//   IoT            : 3 tahap berurutan (proposal -> PPT -> video+poster)
+//   Sumo Bot       : 0 tahap (langsung tanding di hari H)
+// SubmissionStage = definisi tahapnya (dibuat panitia).
+// Submission      = karya yang dikumpulkan peserta untuk satu tahap.
+
+model SubmissionStage {
+  id       String   @id @default(uuid())
+  branchId String
+  name     String // "Pengumpulan Project", "Pengumpulan Proposal", "Pengumpulan PPT", "Pengumpulan Video"
+  order    Int // urutan tahap, dimulai dari 1
+  deadline DateTime
+
+  // Jenis file yang diharapkan — bebas teks untuk ditampilkan ke peserta,
+  // validasi ekstensi dilakukan di application layer saat upload.
+  expectedFileHint String? // ".pka", "PDF", "zip/rar", dst
+  allowsLink        Boolean @default(false) // true untuk Web Programming (Link Figma)
+
+  createdAt DateTime @default(now())
+
+  branch      CompetitionBranch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+
+  @@unique([branchId, order])
+  @@map("submission_stages")
+}
+
+model Submission {
+  id             String @id @default(uuid())
+  registrationId String
+  stageId        String
+
+  workTitle String // "Judul Karya"
+  fileUrl   String? // path/URL Supabase Storage
+  linkUrl   String? // contoh: Link Figma — diisi kalau SubmissionStage.allowsLink = true
+
+  submittedAt DateTime @default(now())
+
+  registration CompetitionRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  stage        SubmissionStage         @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@unique([registrationId, stageId]) // satu submission per tahap per registrasi
+  @@map("submissions")
+}
+
+// ----------------------------------------------------------------------------
+// FASE BERIKUTNYA (jangan dihapus — referensi untuk pengembangan lanjutan)
+// ----------------------------------------------------------------------------
+// Saat mau bangun forum:
+//   model ForumPost { id, authorId -> User, title, body, createdAt, ... }
+//   model ForumComment { id, postId, authorId -> User, body, ... }
+//
+// Saat mau bangun grup:
+//   model Group { id, name, createdById -> User, ... }
+//   model GroupMember { id, groupId, userId -> User, role (admin/member), ... }
+//
+// Saat mau bangun course:
+//   model Course { id, title, createdById -> User, ... }
+//   model CourseEnrollment { id, courseId, userId -> User, progress, ... }
+//
+// Pola yang HARUS diikuti: semua "author"/"member"/"enrollee" relasi ke
+// User.id yang sama. Jangan bikin tabel auth/profile baru untuk fitur baru.
