@@ -23,6 +23,10 @@
   --color-fitcom-neutral: #D0D7DD;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background: white;
   color: #171717;
@@ -37,11 +41,31 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: -0.025em;
 }
 
-/* Radial gradient arah atas-tengah, warna accent opacity rendah */
-.hero-gradient {
-  background: radial-gradient(
-    ellipse 110% 55% at 50% -5%,
-    rgba(100, 193, 218, 0.18) 0%,
-    transparent 65%
-  );
+/* ── Keyframes ───────────────────────────────────────────────────────────── */
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* ── Custom utilities (Tailwind v4) ──────────────────────────────────────── */
+
+@utility animate-fade-up {
+  animation: fade-up 0.7s ease-out both;
+}
+
+@utility animate-marquee {
+  animation: marquee 28s linear infinite;
+  will-change: transform;
+}
+
+/* Dot-grid: titik putih transparan di atas background gelap */
+@utility bg-dot-grid {
+  background-image: radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1px);
+  background-size: 28px 28px;
 }

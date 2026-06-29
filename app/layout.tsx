@@ -18,11 +18,6 @@ export const metadata: Metadata = {
   title: "FITCOM 4.0 — Faculty of Informatics Technology Competition",
   description:
     "Kompetisi teknologi tahunan dari Fakultas Teknologi dan Informatika Universitas Dinamika. Cyber Security, Web Programming, IoT, Sumo Bot RC 1kg.",
-  icons: {
-    icon: "/fitcom-ico.png",
-    shortcut: "/fitcom-ico.png",
-    apple: "/fitcom-ico.png",
-  },
 };
 
 export default function RootLayout({
