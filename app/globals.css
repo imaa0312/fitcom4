@@ -8,26 +8,40 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 
-  /* FITCOM brand colors — pakai sebagai bg-fitcom-*, text-fitcom-*, border-fitcom-* */
+  /* Body font — Inter, sedikit rapat untuk feel modern */
+  --font-sans: var(--font-inter);
+  /* Display font — Space Grotesk, untuk heading dan brand */
+  --font-display: var(--font-space-grotesk);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* FITCOM brand colors — bg-fitcom-*, text-fitcom-*, border-fitcom-* */
   --color-fitcom-darkest: #091836;
   --color-fitcom-dark:    #00376F;
   --color-fitcom-primary: #09265B;
-  --color-fitcom-accent:  #64C1DA;
+  --color-fitcom-accent:  #09265B;
   --color-fitcom-neutral: #D0D7DD;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: white;
+  color: #171717;
+  font-family: var(--font-sans, 'Inter', Arial, sans-serif);
+  line-height: 1.65;
+  letter-spacing: -0.01em;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Display font untuk semua heading — Space Grotesk lebih berkarakter */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display, sans-serif);
+  letter-spacing: -0.025em;
+}
+
+/* Radial gradient arah atas-tengah, warna accent opacity rendah */
+.hero-gradient {
+  background: radial-gradient(
+    ellipse 110% 55% at 50% -5%,
+    rgba(100, 193, 218, 0.18) 0%,
+    transparent 65%
+  );
 }
